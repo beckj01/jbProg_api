@@ -15,7 +15,16 @@ router = APIRouter(
 def get_users(db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)):
     users = db.query(models.User).order_by(models.User.id).all()
     return users
-    
+
+@router.get("/me", response_model=schemas.UserResponsePermissions)
+def get_me(db:Session=Depends(get_db), current_user:int=Depends(oauth2.get_current_user)):
+    user = db.query(models.User).filter(models.User.id==current_user.id).first()
+    return user
+
+@router.get("/permissions", response_model=List[schemas.PermissionResponse])
+def get_permissions(db:Session=Depends(get_db), current_user:int=Depends(oauth2.get_current_user)):
+    perms = db.query(models.Permission).order_by(models.Permission.name).all()
+    return perms
 
 @router.get("/{id}", response_model=schemas.UserResponsePermissions)
 def get_user(id: int, db: Session = Depends(get_db)):
@@ -50,9 +59,13 @@ def update_user(id: int, user: schemas.UserUpdate, db: Session = Depends(get_db)
     if update_user == None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with id: {id} does not exist.")
 
-    # check so that only the logged in user can only update their own username
-    if update_user.id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"You cannot update another users profile")
+    # if the user has admin or user_profiles permission they can update any users profile, otherwise they can only update their own
+    curr_user_permissions = [p.name for p in current_user.permissions]
+    if not "admin" in curr_user_permissions and not "user_profiles" in curr_user_permissions:
+        # no user access hence can logged in user can only update their own user profile
+        if update_user.id != current_user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"You cannot update another users profile")
+    
 
     update_query.update(user.model_dump(), synchronize_session=False)
     db.commit()
@@ -81,6 +94,8 @@ def delete_user(id:int, db:Session=Depends(get_db), current_user:int=Depends(oau
     user_query.delete(synchronize_session=False)
     db.commit()
     return
+
+
 
 
 @router.post("/{id}/permissions", status_code=status.HTTP_201_CREATED, response_model=schemas.UserResponsePermissions)

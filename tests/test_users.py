@@ -21,6 +21,20 @@ def test_unauthorized_user_get_all_users(client, test_user, test_user2):
     res.status_code == 401
 
 
+def test_unauthorized_user_get_me(client, test_user):
+    res = client.get("/users/me")
+    res.status_code == 401
+
+def test_get_me(authorized_client, test_user):
+    res = authorized_client.get("/users/me")
+    user = schemas.UserResponsePermissions(**res.json())
+    
+    res.status_code == 200
+    user.id = test_user["id"]
+    user.short_name = test_user["short_name"]
+    user.display_name = test_user["display_name"]
+
+
 def test_create_user_basic(client):
     res = client.post("/users", json={"email": "testuser1@gmail.com", "password": "pwd999"})
 
@@ -92,6 +106,23 @@ def test_update_other_users_profile(authorized_client, test_user, test_user2):
                 "pc_name": "IO4444"}
     res = authorized_client.put(f"/users/{test_user2["id"]}", json=data)
     assert res.status_code == 403
+
+def test_admin_update_other_users_profile(authorized_admin_client, admin_user, test_user):
+    data = {"email": "changetestuser@gmail.com", 
+                    "username": "changeuser",
+                    "short_name": "CU", 
+                    "display_name": "Change User",
+                    "pc_name": "IO4444"}
+    res = authorized_admin_client.put(f"/users/{test_user["id"]}", json=data)
+    updated_user = schemas.UserResponse(**res.json())
+          
+    assert res.status_code == 200
+    assert updated_user.email == data["email"]
+    assert updated_user.username == data["username"]
+    assert updated_user.short_name == data["short_name"]
+    assert updated_user.display_name == data["display_name"]
+    assert updated_user.pc_name == data["pc_name"]
+    
 
 def test_unauthorized_user_update_profile(client, test_user):
     data = {"email": "changetestuser@gmail.com", 
