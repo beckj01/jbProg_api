@@ -25,6 +25,7 @@ class PostResponse(PostBase):
 class PostOut(BaseModel):
     Post: PostResponse
     votes: int
+    user_voted: bool
 
 
 class UserCreate(BaseModel):

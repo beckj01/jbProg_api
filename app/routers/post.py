@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
-from sqlalchemy import func
+from sqlalchemy import func, or_, and_, select, exists
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import models, oauth2, schemas
@@ -18,23 +18,53 @@ def get_posts(db: Session = Depends(get_db), current_user: int = Depends(oauth2.
     #cursor.execute("""SELECT * FROM posts""")
     #posts = cursor.fetchall()
 
-    posts = db.query(models.Post).filter(
-        models.Post.title.contains(search)).limit(limit).offset(skip).all()
+    #posts = db.query(models.Post).filter(
+    #    models.Post.title.contains(search)).limit(limit).offset(skip).all()
+
+    # subquery to check if current_user has voted on the post
+    user_vote_subq = select(models.Vote.post_id).where(
+        models.Vote.post_id == models.Post.id, 
+        models.Vote.user_id == current_user.id
+    ).correlate(models.Post).exists()
 
     # default join is a LEFT INNER join, hence use isouter keyword to set to a LEFT OUTER join
     # .label() allows you to assign an alias to a field name
-    results = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
-        models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(
-        models.Post.title.contains(search)).order_by(models.Post.created_at.desc()).limit(limit).offset(skip).all()
+    results = db.query(
+        models.Post, 
+        func.count(models.Vote.post_id).label("votes"),
+        user_vote_subq.label("user_voted")
+        ).join(
+        models.Vote, models.Vote.post_id == models.Post.id, isouter=True
+        ).group_by(
+            models.Post.id
+        ).filter(
+            and_(
+                or_(
+                    models.Post.title.ilike(f"%{search}%"),
+                    models.Post.content.ilike(f"%{search}%")
+                ), 
+                # backend filter to show all published posts, but only drafts owner by the current user
+                or_(
+                    models.Post.published == True,
+                    models.Post.owner_id == current_user.id
+                )
+            )
+        ).order_by(models.Post.created_at.desc()).limit(limit).offset(skip).all()
 
     return results
 
 
 @router.get("/me", response_model=List[schemas.PostOut])
 def get_myposts(db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)):
-    my_posts = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
+    # subquery to check if current_user has voted on the post
+    user_vote_subq = select(models.Vote.post_id).where(
+        models.Vote.post_id == models.Post.id, 
+        models.Vote.user_id == current_user.id
+    ).correlate(models.Post).exists()
+    
+    my_posts = db.query(models.Post, func.count(models.Vote.post_id).label("votes"), user_vote_subq.label("user_voted")).join(
         models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(
-        models.Post.owner_id == current_user.id).all()
+        models.Post.owner_id == current_user.id).order_by(models.Post.created_at.desc()).all()
     return my_posts
 
 
@@ -42,7 +72,14 @@ def get_myposts(db: Session = Depends(get_db), current_user: int = Depends(oauth
 def get_post(id: int, response: Response, db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_user)):
     #cursor.execute("""SELECT * FROM posts WHERE id = %s""", (str(id)))
     #post = cursor.fetchone()
-    post = db.query(models.Post, func.count(models.Vote.post_id).label("votes")).join(
+
+    # subquery to check if current_user has voted on the post
+    user_vote_subq = select(models.Vote.post_id).where(
+        models.Vote.post_id == models.Post.id, 
+        models.Vote.user_id == current_user.id
+    ).correlate(models.Post).exists()
+
+    post = db.query(models.Post, func.count(models.Vote.post_id).label("votes"), user_vote_subq.label("user_voted")).join(
         models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).filter(
         models.Post.id==id).first()
     if not post:
