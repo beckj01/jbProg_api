@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 
@@ -144,6 +144,85 @@ class QtyResponse(BaseModel):
 
 # required for Pydantic v2 recursive self-referencing models
 QtyResponse.model_rebuild()
+
+
+class TaskPredBase(BaseModel):
+    proj_id: int
+    task_id: int
+    pred_proj_id: int
+    pred_task_id: int
+    pred_type: Optional[str] = "PR_FS"
+    lag_hr_cnt: Optional[float] = 0
+
+class TaskPredCreate(TaskPredBase):
+    pass
+
+class TaskPredResponse(TaskPredBase):
+    task_pred_id: int
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaskBase(BaseModel):
+    proj_id: int
+    task_code: str
+    task_name: str
+    status_code: Optional[str] = "TK_NotStart"
+    task_type: Optional[str] = "TK_Task"
+    cstr_type: Optional[str] = None
+
+    # date fields
+    target_start_date: Optional[datetime] = None
+    target_end_date: Optional[datetime] = None
+    act_start_date: Optional[datetime] = None
+    act_end_date: Optional[datetime] = None
+    early_start_date: Optional[datetime] = None
+    early_end_date: Optional[datetime] = None
+    cstr_date: Optional[datetime] = None
+
+    # duration fields
+    total_float_hr_cnt: Optional[float] = None
+    free_float_hr_cnt: Optional[float] = None
+    remain_drtn_hr_cnt: Optional[float] = None
+    target_drtn_hr_cnt: Optional[float] = None
+
+    # resource fields
+    target_work_qty: Optional[float] = 0
+    act_work_qty: Optional[float] = 0
+    remain_work_qty: Optional[float] = 0
+
+class TaskCreate(TaskBase):
+    pass
+
+class TaskResponse(TaskBase):
+    task_id: int
+    predecessors: List[TaskPredResponse] = []
+    successors: List[TaskPredResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProjectBase(BaseModel):
+    project_id: str
+    proj_name: str
+    plan_start_date: Optional[datetime] = None
+    plan_end_date: Optional[datetime] = None
+    last_recalc_date: datetime
+
+class ProjectCreate(ProjectBase):
+    pass
+
+class ProjectResponse(ProjectBase):
+    proj_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# optional: expanded schema when fetching a single project with its full schedule
+class ProjectDetailResponse(ProjectResponse):
+    tasks: List[TaskResponse] = []
+    
 
 # Notes:
 # age: Optional[int] = None - This field is NOT required, if omitted detaults to None

@@ -94,3 +94,77 @@ class QtyEntry(Base):
 
     # back-reference relationship
     quantity = relationship("Qty", back_populates="entries")
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    proj_id = Column(Integer, primary_key=True, nullable=False)
+    project_id = Column(String, unique=True, nullable=False)
+    proj_name = Column(String, nullable=False)
+    plan_start_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    plan_end_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    last_recalc_date = Column(TIMESTAMP(timezone=True), nullable=False) # data date
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
+
+    # relationship to tasks
+    tasks = relationship("Task", back_populates="project", cascade="all, delete-orphan")
+    taskpreds = relationship("TaskPred", foreign_keys="[TaskPred.proj_id]", back_populates="project", cascade="all, delete-orphan")
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    task_id = Column(Integer, primary_key=True, nullable=False)
+    proj_id = Column(Integer, ForeignKey("projects.proj_id", ondelete="CASCADE"), nullable=False)
+    # wbs_id Column(Integer, ForeignKey("..."))
+    # clndr_id Column(Integer, ForeignKey("..."))
+    task_code = Column(String, nullable=False)
+    task_name = Column(String, nullable=False)
+    status_code = Column(String, default="TK_NotStart")
+    task_type = Column(String, default="TT_Task") # Check this value, I forget the code values for Task Dependent activities
+    cstr_type = Column(String)
+    
+    # date fields
+    target_start_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    target_end_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    act_start_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    act_end_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    early_start_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    early_end_date = Column(TIMESTAMP(timezone=True), nullable=True)
+    cstr_date = Column(TIMESTAMP(timezone=True), nullable=True)
+
+    # duration fields
+    total_float_hr_cnt = Column(Float)
+    free_float_hr_cnt = Column(Float)
+    remain_drtn_hr_cnt = Column(Float)
+    target_drtn_hr_cnt = Column(Float) # original duration
+
+    # resource fields
+    target_work_qty = Column(Float, default=0)
+    act_work_qty = Column(Float, default=0)
+    remain_work_qty = Column(Float, default=0)
+
+    # relationships
+    project = relationship("Project", back_populates="tasks")
+
+    # self-referencing relationship for network logic
+    predecessors = relationship("TaskPred", foreign_keys="[TaskPred.task_id]", back_populates="successor", cascade="all, delete-orphan")
+    successors = relationship("TaskPred", foreign_keys="[TaskPred.pred_task_id]", back_populates="predecessor", cascade="all, delete-orphan")
+
+class TaskPred(Base):
+    __tablename__ = "taskpreds"
+
+    task_pred_id = Column(Integer, primary_key=True, nullable=False)
+    proj_id = Column(Integer, ForeignKey("projects.proj_id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(Integer, ForeignKey("tasks.task_id", ondelete="CASCADE"), nullable=False)
+    pred_proj_id = Column(Integer, ForeignKey("projects.proj_id", ondelete="CASCADE"), nullable=False)
+    pred_task_id = Column(Integer, ForeignKey("tasks.task_id", ondelete="CASCADE"), nullable=False)
+    pred_type = Column(String, default="PR_FS")
+    lag_hr_cnt = Column(Float, default=0)
+
+    
+    # back-reference links
+    project = relationship("Project", foreign_keys=[proj_id], back_populates="taskpreds")
+    pred_project = relationship("Project",foreign_keys=[pred_proj_id])
+    successor = relationship("Task", foreign_keys=[task_id], back_populates="predecessors")
+    predecessor = relationship("Task", foreign_keys=[pred_task_id], back_populates="successors")

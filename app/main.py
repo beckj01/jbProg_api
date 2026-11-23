@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from . import models
 from .database import engine, SessionLocal
-from .routers import post, user, auth, vote, qty
+from .routers import post, user, auth, vote, qty, schedule
 from .config import settings
 from .utils import hash_password
 from fastapi.middleware.cors import CORSMiddleware
@@ -95,6 +95,7 @@ app.include_router(user.router)
 app.include_router(auth.router)
 app.include_router(vote.router)
 app.include_router(qty.router)
+app.include_router(schedule.router)
 
 
 @app.get("/")

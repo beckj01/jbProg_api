@@ -4,6 +4,8 @@ import socket
 import sys
 import psycopg2
 from psycopg2 import sql
+from sqlalchemy import text
+from app.database import SessionLocal
 
 host = "aws-0-ap-southeast-1.pooler.supabase.com"
 port = 6543
@@ -12,6 +14,12 @@ username = "postgres.qltqswnznlpfamrlctoz"
 pwd = "Josie4lifetestDB"
 
 DB_URL = f"postgresql://{username}:{pwd}@{host}:{port}/{db_name}"
+
+ALLOWED_SEQUENCES = {
+    ("projects", "proj_id"),
+    ("tasks", "task_id"),
+    ("taskpreds", "task_pred_id")
+}
 
 def learnDateTime():
     ts = datetime.now(timezone.utc)
@@ -110,8 +118,28 @@ def test_database_connection():
         print(f"\n[ERROR] Database connection or execution failed: {error}")
         sys.exit(1)
 
+def sync_sequence(tb_name: str, id_col: str) -> int | None:
+    # Syncs a PostgreSQL sequence for a table name & column name to MAX(id_col)
+
+    if (tb_name, id_col) not in ALLOWED_SEQUENCES:
+        raise ValueError(f"Unsupported table/column sequence {tb_name}.{id_col}")
+
+    sql = text(f"""
+        SELECT setval(
+            pg_get_serial_sequence(:tb_name, :id_col), 
+            COALESCE((SELECT MAX({id_col}) FROM {tb_name}), 1),
+            true
+            );
+    """)
+
+    with SessionLocal() as db:
+        new_val = db.execute(sql, {"tb_name": tb_name, "id_col": id_col},).scalar()
+        db.commit()
+        return new_val
+
 
 
 
 if __name__ == "__main__":
-    test_database_connection()
+    updated_value = sync_sequence("projects", "proj_id")
+    print(f"Synced projects.proj_id sequence to {updated_value}")

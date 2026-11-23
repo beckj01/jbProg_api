@@ -208,3 +208,48 @@ def test_qtys(test_user, session):
 
     return qtys
 
+@pytest.fixture()
+def test_schedule(session):
+    proj1 = models.Project(project_id="PRJ-001", proj_name="Test Project 1", plan_start_date=datetime(2026, 10, 1, tzinfo=timezone.utc),
+                           plan_end_date=datetime(2026, 12, 31, tzinfo=timezone.utc), last_recalc_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
+        )
+    proj2 = models.Project(project_id="PRJ-002", proj_name="Test Project 2", plan_start_date=datetime(2026, 11, 1, tzinfo=timezone.utc),
+                               plan_end_date=datetime(2027, 3, 28, tzinfo=timezone.utc), last_recalc_date=datetime(2026, 11, 15, tzinfo=timezone.utc),
+        )
+    session.add_all([proj1, proj2])
+    session.commit()
+    session.refresh(proj1)
+    session.refresh(proj2)
+
+    task1 = models.Task(proj_id=proj1.proj_id, task_code="A1000", task_name="Site Mobilisation", status_code="TK_Complete",
+                         task_type="TT_Task", target_drtn_hr_cnt=40, remain_drtn_hr_cnt=0)
+    task2 = models.Task(proj_id=proj1.proj_id, task_code="A1010", task_name="Earthworks", status_code="TK_Active",
+                             task_type="TT_Task", target_drtn_hr_cnt=80, remain_drtn_hr_cnt=40)
+    task3 = models.Task(proj_id=proj1.proj_id, task_code="A1020", task_name="Mechanical Installation", status_code="TK_NotStart",
+                             task_type="TT_Task", target_drtn_hr_cnt=60, remain_drtn_hr_cnt=60)
+
+    session.add_all([task1, task2, task3])
+    session.commit()
+    session.refresh(task1)
+    session.refresh(task2)
+    session.refresh(task3)
+
+    # link from A1000 to A1010
+    pred1 = models.TaskPred(proj_id=proj1.proj_id, task_id=task2.task_id, 
+                            pred_proj_id=proj1.proj_id, pred_task_id=task1.task_id, 
+                            pred_type="PR_FS", lag_hr_cnt=0)
+    #link from A1010 to A1020
+    pred2 = models.TaskPred(proj_id=proj1.proj_id, task_id=task3.task_id, 
+                                pred_proj_id=proj1.proj_id, pred_task_id=task2.task_id, 
+                                pred_type="PR_FS", lag_hr_cnt=8)
+    session.add_all([pred1, pred2])
+    session.commit()
+    session.refresh(pred1)
+    session.refresh(pred2)
+
+    return {"projects": [proj1, proj2], 
+            "tasks": [task1, task2, task3], 
+            "taskpreds": [pred1, pred2]}
+    
+
+    
