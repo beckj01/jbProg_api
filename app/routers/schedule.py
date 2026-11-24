@@ -1,9 +1,10 @@
 from typing import List, Optional
-from fastapi import APIRouter, Response, status, HTTPException, Depends
+from fastapi import APIRouter, Response, status, HTTPException, Depends, UploadFile, File
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session, selectinload
 from ..database import get_db
 from .. import models, schemas, oauth2
+from ..services.xer_importer import import_xer_schedule_bulk
 
 router = APIRouter(
     prefix="/schedule", 
@@ -270,3 +271,32 @@ def delete_task_pred(task_pred_id:int, db:Session=Depends(get_db), current_user:
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/import-xer", status_code=status.HTTP_201_CREATED)
+async def upload_xer_file(file: UploadFile = File(...), db:Session=Depends(get_db), current_user:int=Depends(oauth2.get_current_user)):
+    
+    if not file.filename or not file.filename.lower().endswith(".xer"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please upload a valid .xer schedule file.")
+
+    raw_bytes = await file.read()
+
+    # XER files are typicalyl cp1252 / latin-1 or utf-8
+    try:
+        raw_text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raw_text = raw_bytes.decode("cp1252", errors="replace")
+
+    try:
+        proj_count, task_count, pred_count = import_xer_schedule_bulk(db=db, raw_text=raw_text)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to import XER file: {exc}")
+
+    return {
+        "message": "XER import completed successfully.", 
+        "filename": file.filename,
+        "projects_imported": proj_count, 
+        "tasks_imported": task_count, 
+        "relationships_imported": pred_count
+    }
