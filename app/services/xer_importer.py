@@ -207,13 +207,13 @@ def import_xer_schedule_bulk(db: Session, raw_text: str, fallback_recalc_date: O
             _parse_float(row.get("lag_hr_cnt"), default=0)
         ))
 
-        if pred_values:
-            pred_sql = f"""
-                INSERT INTO taskpreds ({", ".join(pred_columns)})
-                VALUES %s"""
+    if pred_values:
+        pred_sql = f"""
+            INSERT INTO taskpreds ({", ".join(pred_columns)})
+            VALUES %s"""
             
-            with raw_conn.cursor() as cur:
-                execute_values(cur, pred_sql, pred_values, page_size=1000)
+        with raw_conn.cursor() as cur:
+            execute_values(cur, pred_sql, pred_values, page_size=1000)
 
 
     db.commit()
